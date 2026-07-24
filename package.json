@@ -4,6 +4,7 @@
   "private": true,
   "description": "학생을 위한 목·어깨 스트레칭 웹앱",
   "scripts": {
+    "build": "node build-static.js",
     "start": "node server.js",
     "check": "node --check app.js && node --check server.js && node --check sw.js"
   },
