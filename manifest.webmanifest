@@ -1,0 +1,12 @@
+{
+  "name": "틈펴",
+  "short_name": "틈펴",
+  "description": "학생을 위한 목·어깨 스트레칭 가이드",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f3f5ef",
+  "theme_color": "#416653",
+  "icons": [
+    { "src": "icon.svg?v=4", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

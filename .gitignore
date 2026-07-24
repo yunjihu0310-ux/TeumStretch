@@ -1,0 +1,4 @@
+node_modules/
+push-config.json
+push-data.json
+.env

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">틈펴 앱 아이콘</title>
+  <desc id="desc">짙은 녹색 바탕에 흰색 펴 글자</desc>
+  <rect width="128" height="128" rx="34" fill="#416653"/>
+  <text x="64" y="64" fill="#fffdf5" font-family="Pretendard, Apple SD Gothic Neo, Noto Sans KR, sans-serif" font-size="68" font-weight="800" text-anchor="middle" dominant-baseline="central">펴</text>
+</svg>
