@@ -11,6 +11,8 @@ const state = {
   remaining: 30,
   running: false,
   records: JSON.parse(localStorage.getItem("teumpyeo-records") || "[]"),
+  checkins: JSON.parse(localStorage.getItem("teumpyeo-checkins") || "[]"),
+  comparison: null,
   reminders: JSON.parse(localStorage.getItem("teumpyeo-reminders") || "{}"),
   deliveredReminderKeys: new Set(),
   reminderTicker: null,
@@ -137,25 +139,113 @@ const phaseAssignments = {
 };
 const bilateralExercises = new Set(["neck_side","neck_turn","levator","cross_arm","seated_twist","side_reach","standing_side_lower","single_knee_chest"]);
 const painSafeExercises = new Set(["chin_tuck","neck_nod","shoulder_roll","shoulder_shrug","scapular_squeeze","seated_spine_tall","seated_pelvic_tilt","standing_side_lower"]);
+const comparisonOptions = {
+  much_better: { label:"훨씬 편함", score:2 },
+  better: { label:"조금 덜 뻐근함", score:1 },
+  same: { label:"비슷함", score:0 },
+  worse: { label:"더 뻐근함", score:-1 }
+};
+const dailyPostureTips = [
+  { title:"턱을 살짝 당기기", body:"화면은 눈높이에 맞춰요.", note:"고개가 앞으로 빠지지 않게!" },
+  { title:"두 발을 바닥에", body:"발바닥 전체를 편안히 붙여요.", note:"다리를 꼬는 습관도 잠깐 쉬어요." },
+  { title:"어깨 힘 내려놓기", body:"숨을 내쉬며 어깨를 툭 내려요.", note:"귀와 어깨 사이를 멀게!" },
+  { title:"엉덩이는 의자 깊숙이", body:"허리가 등받이에 닿도록 앉아요.", note:"허리 뒤에는 작은 쿠션도 좋아요." },
+  { title:"화면과 한 팔 거리", body:"눈과 화면 사이에 여유를 둬요.", note:"몸 대신 화면을 가까이 당겨요." },
+  { title:"30분마다 자세 바꾸기", body:"좋은 자세도 오래 유지하면 지쳐요.", note:"잠깐 일어나는 것도 충분해요." },
+  { title:"책은 조금 세워 보기", body:"고개보다 책의 각도를 올려요.", note:"독서대가 없다면 두꺼운 책을 받쳐요." },
+  { title:"팔꿈치는 책상 가까이", body:"팔을 멀리 뻗지 않게 당겨 앉아요.", note:"어깨가 앞으로 말리는 힘을 줄여요." },
+  { title:"허리는 길게 세우기", body:"배를 세게 조이지 말고 가볍게 펴요.", note:"가슴을 과하게 내밀 필요는 없어요." },
+  { title:"한쪽으로 기대지 않기", body:"몸의 무게를 양쪽 엉덩이에 나눠요.", note:"턱을 괴는 손도 잠깐 내려놔요." },
+  { title:"휴대폰을 조금 높이", body:"화면을 가슴보다 위로 들어요.", note:"팔이 피곤하면 책상에 받쳐요." },
+  { title:"가방은 양쪽 어깨에", body:"끈 길이를 비슷하게 맞춰 메요.", note:"무거운 물건은 등에 가깝게 넣어요." },
+  { title:"서 있을 땐 무릎 편하게", body:"무릎을 꽉 잠그지 않고 서요.", note:"체중은 두 발에 고르게 나눠요." },
+  { title:"자세보다 움직임 기억하기", body:"완벽히 버티기보다 자주 움직여요.", note:"몸에 가장 좋은 자세는 다음 자세예요." }
+];
+const dailyPostureVisuals = [
+  `<circle cx="42" cy="18" r="10"/><path d="M42 28v22M29 48h27M34 50v37M55 50v37M22 87h48M72 18v34M68 22l4-4 4 4"/><path class="accent" d="M48 18h19M61 13l6 5-6 5"/>`,
+  `<path d="M22 21v35l13 19M60 21v35L47 75M18 76h25M43 76h25M18 84h50"/><path class="accent" d="M20 68c7 5 14 5 21 0M47 68c7 5 14 5 21 0"/><path class="bad" d="M31 88v7M55 88v7"/>`,
+  `<circle cx="50" cy="20" r="11"/><path d="M50 31v24M24 52c8-7 17-10 26-10s18 3 26 10M31 52v34M69 52v34"/><path class="accent" d="M21 32v14M17 42l4 4 4-4M79 32v14M75 42l4 4 4-4"/>`,
+  `<circle cx="46" cy="18" r="9"/><path d="M46 27v27M30 50h33M35 53v34M62 53v34M24 87h52M70 43v44M46 42c10 0 15 5 18 13"/><path class="accent" d="M42 52c-7 8-7 18-3 26"/>`,
+  `<circle cx="29" cy="25" r="9"/><path d="M29 34v38M18 71h25M74 15v64M68 22h12M42 25h25"/><path class="accent" d="M42 19v12M42 25h25M62 20l5 5-5 5"/>`,
+  `<circle cx="43" cy="19" r="9"/><path d="M43 28v32M27 42l16 8 17-8M35 60l-8 26M51 60l10 26M18 88h53"/><path class="accent" d="M75 27a13 13 0 1 1-1-1M75 27v10l7 4"/>`,
+  `<circle cx="30" cy="20" r="8"/><path d="M30 28v41M18 68h26M62 29v45M47 48l15-19 16 19M48 49h29M54 53h18"/><path class="accent" d="M40 39l10 7M46 34l4 12"/>`,
+  `<circle cx="48" cy="16" r="8"/><path d="M48 24v30M28 49h39M34 52v35M63 52v35M16 48h68M18 48v39M82 48v39M31 39l17 10 17-10"/><circle class="accent" cx="31" cy="39" r="3"/><circle class="accent" cx="65" cy="39" r="3"/>`,
+  `<circle cx="48" cy="16" r="8"/><path d="M48 24v61M31 40l17 8 17-8M35 85h26"/><path class="accent" d="M55 28c5 7 5 14 0 21s-5 14 0 21M72 32v42M68 37l4-5 4 5M68 69l4 5 4-5"/>`,
+  `<circle cx="49" cy="17" r="8"/><path d="M49 25v30M28 52h42M34 54v33M65 54v33M20 87h58"/><path class="accent" d="M20 63h19M20 63l6-5M20 63l6 5M78 63H59M78 63l-6-5M78 63l-6 5"/>`,
+  `<circle cx="39" cy="17" r="8"/><path d="M39 25v37M24 42l15 8 15-8M30 62l-5 25M48 62l6 25M18 87h44M67 22v29M62 22h10M60 51h14"/><path class="accent" d="M55 36l10-6M60 27l5 3-1 6"/>`,
+  `<circle cx="49" cy="16" r="8"/><path d="M49 24v57M28 41l21 10 21-10M35 81h28"/><path d="M32 31c-8 8-8 27-4 39M66 31c8 8 8 27 4 39M32 31c6-5 28-5 34 0"/><path class="accent" d="M41 30v40M57 30v40"/>`,
+  `<circle cx="48" cy="15" r="8"/><path d="M48 23v35M30 41l18 9 18-9M38 58l-2 28M58 58l5 28M22 86h54"/><path class="accent" d="M32 66l4-4 4 4M58 66l4-4 4 4"/>`,
+  `<circle cx="22" cy="25" r="6"/><path d="M22 31v31M13 43l9 6 9-6M17 62l-5 23M27 62l5 23"/><circle cx="50" cy="19" r="6"/><path d="M50 25v37M40 38l10 6 10-6M45 62l-3 23M55 62l3 23"/><circle cx="78" cy="25" r="6"/><path d="M78 31v31M69 43l9 6 9-6M73 62l-5 23M83 62l5 23"/><path class="accent" d="M30 14c9-7 28-7 38 0M64 9l4 5-6 2"/>`
+];
 
 let routine = [];
 
 function init() {
   const now = new Date();
   $("#todayLabel").textContent = new Intl.DateTimeFormat("ko-KR", { month:"long", day:"numeric", weekday:"long" }).format(now);
+  ensureFeedbackUI();
   bindEvents();
+  renderDailyPosture();
   restoreReminders();
   registerServiceWorker();
   startReminderScheduler();
   renderStats();
+  renderSubjectiveTrend();
   renderWeek();
   buildRoutine(false);
   renderExerciseLibrary();
 }
 
+function renderDailyPosture(date = new Date()) {
+  const card = $(".posture-note");
+  if (!card) return;
+  const dayNumber = Math.floor(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / 86400000);
+  const tip = dailyPostureTips[((dayNumber % dailyPostureTips.length) + dailyPostureTips.length) % dailyPostureTips.length];
+  const title = $(".posture-content strong", card);
+  const body = $(".posture-content p", card);
+  const note = $(".posture-content p span", card);
+  const visual = $(".posture-content svg", card);
+  if (title) title.textContent = tip.title;
+  if (body) {
+    const textNode = [...body.childNodes].find(node => node.nodeType === Node.TEXT_NODE && node.textContent.trim());
+    if (textNode) textNode.textContent = tip.body;
+  }
+  if (note) note.textContent = tip.note;
+  if (visual) {
+    visual.innerHTML = dailyPostureVisuals[dayNumber % dailyPostureVisuals.length];
+    visual.setAttribute("role", "img");
+    visual.setAttribute("aria-label", `${tip.title} 자세 그림`);
+    visual.removeAttribute("aria-hidden");
+  }
+  card.dataset.tipIndex = String(dayNumber % dailyPostureTips.length);
+}
+
+function ensureFeedbackUI() {
+  if (!$("#comparisonCheck")) {
+    $(".mood-options").insertAdjacentHTML("afterend", `<section class="comparison-check hidden" id="comparisonCheck" aria-live="polite">
+      <div class="comparison-head"><div><p class="eyebrow">나의 변화</p><h3 id="comparisonTitle">어제와 비교하면?</h3></div><span>정답 없는 기록</span></div>
+      <div class="comparison-options" role="radiogroup" aria-label="지난 기록과 비교한 몸의 느낌">
+        <button data-comparison="much_better" role="radio" aria-checked="false"><span>↗</span><b>훨씬 편함</b></button>
+        <button data-comparison="better" role="radio" aria-checked="false"><span>⌁</span><b>조금 덜 뻐근함</b></button>
+        <button data-comparison="same" role="radio" aria-checked="false"><span>—</span><b>비슷함</b></button>
+        <button data-comparison="worse" role="radio" aria-checked="false"><span>↘</span><b>더 뻐근함</b></button>
+      </div>
+      <p class="comparison-note">몸은 숫자보다 먼저 느낌으로 말해요. 어제의 나와만 가볍게 비교해요.</p>
+    </section>`);
+  }
+  if (!$("#subjectiveTrend")) {
+    $(".history-card").insertAdjacentHTML("beforebegin", `<article class="paper-card subjective-card">
+      <div class="subjective-head"><div><p class="eyebrow">최근 7일</p><h2>내가 느낀 변화</h2></div><span>주관 기록</span></div>
+      <p id="subjectiveSummary">비교 기록이 쌓이면, 몸이 보내는 작은 변화를 돌아볼 수 있어요.</p>
+      <div id="subjectiveTrend" class="subjective-trend"></div>
+    </article>`);
+  }
+}
+
 function bindEvents() {
   $$("[data-nav]").forEach(button => button.addEventListener("click", () => navigate(button.dataset.nav)));
   $$(".mood").forEach(button => button.addEventListener("click", () => selectMood(button)));
+  $$('[data-comparison]').forEach(button => button.addEventListener("click", () => selectComparison(button)));
   $$("[data-choice]").forEach(group => group.addEventListener("click", event => {
     const button = event.target.closest("button"); if (!button) return;
     if (group.dataset.multiple === "true") {
@@ -209,9 +299,59 @@ function bindEvents() {
 function selectMood(button) {
   $$(".mood").forEach(item => { item.classList.remove("selected"); item.setAttribute("aria-checked","false"); });
   button.classList.add("selected"); button.setAttribute("aria-checked","true"); state.mood = button.dataset.mood;
+  upsertTodayCheckin({ mood:state.mood });
+  renderComparisonPrompt();
   renderExerciseLibrary();
   if (state.mood === "pain") openModal("safetyModal");
   else unlockPlanner();
+}
+
+function renderComparisonPrompt() {
+  const prompt = $("#comparisonCheck");
+  if (!prompt) return;
+  const today = calendarKey(new Date());
+  const previous = [...state.checkins]
+    .filter(checkin => checkin.day < today)
+    .sort((a,b) => b.day.localeCompare(a.day))[0];
+  if (!previous) {
+    prompt.classList.add("hidden");
+    return;
+  }
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate()-1);
+  $("#comparisonTitle").textContent = previous.day === calendarKey(yesterday) ? "어제와 비교하면?" : "지난 기록과 비교하면?";
+  prompt.classList.remove("hidden");
+  const todayCheckin = state.checkins.find(checkin => checkin.day === today);
+  state.comparison = todayCheckin?.comparison || null;
+  $$('[data-comparison]').forEach(button => {
+    const selected = button.dataset.comparison === state.comparison;
+    button.classList.toggle("selected", selected);
+    button.setAttribute("aria-checked", String(selected));
+  });
+}
+
+function selectComparison(button) {
+  state.comparison = button.dataset.comparison;
+  $$('[data-comparison]').forEach(item => {
+    const selected = item === button;
+    item.classList.toggle("selected", selected);
+    item.setAttribute("aria-checked", String(selected));
+  });
+  upsertTodayCheckin({ mood:state.mood, comparison:state.comparison });
+  renderSubjectiveTrend();
+  showToast("오늘 느낀 변화를 기록했어요.");
+}
+
+function upsertTodayCheckin(values) {
+  const now = new Date();
+  const day = calendarKey(now);
+  const index = state.checkins.findIndex(checkin => checkin.day === day);
+  const base = index >= 0 ? state.checkins[index] : { day, date:now.toISOString() };
+  const next = { ...base, ...values, date:now.toISOString() };
+  if (index >= 0) state.checkins[index] = next;
+  else state.checkins.push(next);
+  state.checkins = state.checkins.sort((a,b) => a.day.localeCompare(b.day)).slice(-90);
+  localStorage.setItem("teumpyeo-checkins", JSON.stringify(state.checkins));
 }
 
 function safetyContinue() {
@@ -378,7 +518,7 @@ function navigate(name) {
   $$(".bottom-nav button").forEach(button => button.classList.toggle("active", button.dataset.nav === name));
   if (name === "routine" && !routine.length) buildRoutine(false);
   if (name === "library") renderExerciseLibrary();
-  if (name === "record") renderStats();
+  if (name === "record") { renderStats(); renderSubjectiveTrend(); }
   document.body.classList.toggle("routine-mode", name === "routine");
   window.scrollTo({ top:0, behavior:"smooth" });
 }
@@ -398,6 +538,33 @@ function renderStats() {
   $("#headerStreak").textContent = `${streak}일`; $("#weeklySessions").textContent = `${weekly.length}회`; $("#totalMinutes").textContent = `${Math.round(totalSeconds/60)}분`; $("#recordStreak").textContent = `${streak}일`;
   const history = $("#historyList");
   history.innerHTML = state.records.length ? state.records.slice(0,8).map(record => `<div class="history-item"><span>↗</span><div><b>${record.place}에서 ${record.area} 펴기</b><small>${formatRecordDate(record.date)}</small></div><small>${formatDuration(record.seconds)}</small></div>`).join("") : `<div class="empty-history">아직 기록이 없어요. 오늘 첫 스트레칭을 시작해보세요.</div>`;
+}
+
+function renderSubjectiveTrend() {
+  const trend = $("#subjectiveTrend");
+  const summary = $("#subjectiveSummary");
+  if (!trend || !summary) return;
+  const today = new Date();
+  const days = Array.from({ length:7 }, (_,index) => {
+    const date = new Date(today);
+    date.setDate(today.getDate()-(6-index));
+    const entry = state.checkins.find(checkin => checkin.day === calendarKey(date));
+    return { date, option:entry?.comparison ? comparisonOptions[entry.comparison] : null };
+  });
+  const completed = days.filter(day => day.option);
+  if (!completed.length) {
+    summary.textContent = "비교 기록이 쌓이면, 몸이 보내는 작은 변화를 돌아볼 수 있어요.";
+    trend.innerHTML = '<div class="subjective-empty">아직 비교 기록이 없어요.</div>';
+    return;
+  }
+  const latest = completed[completed.length-1];
+  summary.textContent = `최근 느낌은 ‘${latest.option.label}’이에요. 진단 점수가 아닌, 내가 느낀 변화의 기록이에요.`;
+  trend.innerHTML = `<div class="trend-scale" aria-hidden="true"><span>편안</span><span>비슷</span><span>뻐근</span></div><div class="trend-days">${days.map(day => {
+    const top = day.option ? 58-(day.option.score*22) : 58;
+    const label = day.option ? day.option.label : "기록 없음";
+    const weekday = new Intl.DateTimeFormat("ko-KR", { weekday:"short" }).format(day.date);
+    return `<div class="trend-day"><div class="trend-track"><span class="trend-midline"></span>${day.option ? `<i class="trend-point" style="top:${top}px" title="${label}" aria-label="${label}"></i>` : '<i class="trend-point empty" title="기록 없음"></i>'}</div><small>${weekday}</small></div>`;
+  }).join("")}</div>`;
 }
 
 function renderWeek() {
@@ -564,6 +731,7 @@ function showToast(message) { const toast=$("#toast"); toast.textContent=message
 function formatClock(seconds) { const safe=Math.max(0,seconds); return `${String(Math.floor(safe/60)).padStart(2,"0")}:${String(safe%60).padStart(2,"0")}`; }
 function formatDuration(seconds) { return seconds < 60 ? `${seconds}초` : `${Math.round(seconds/60)}분`; }
 function dayKey(date) { return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`; }
+function calendarKey(date) { return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,"0")}-${String(date.getDate()).padStart(2,"0")}`; }
 function formatRecordDate(value) { return new Intl.DateTimeFormat("ko-KR",{month:"long",day:"numeric",weekday:"short",hour:"2-digit",minute:"2-digit"}).format(new Date(value)); }
 function selectedAreaLabel() {
   if (state.area.includes("all")) return "목·어깨·등·허리";
